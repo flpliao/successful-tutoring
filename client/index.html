@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>補課預約系統</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft JhengHei', sans-serif; background: #f0f2f5; color: #333; }
+
+    /* Utility */
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 24px; margin-bottom: 20px; }
+    .card h2 { font-size: 1.3em; margin-bottom: 16px; color: #1a1a2e; border-bottom: 2px solid #667eea; padding-bottom: 8px; display: inline-block; }
+
+    /* Header */
+    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+    .header h1 { font-size: 1.4em; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .header-right span { font-size: 0.9em; opacity: 0.9; }
+
+    /* Buttons */
+    .btn { padding: 8px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9em; font-weight: 500; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-primary:hover { background: #5a6fd6; transform: translateY(-1px); }
+    .btn-danger { background: #e74c3c; color: white; }
+    .btn-danger:hover { background: #c0392b; }
+    .btn-success { background: #27ae60; color: white; }
+    .btn-success:hover { background: #219a52; }
+    .btn-warning { background: #f39c12; color: white; }
+    .btn-warning:hover { background: #d68910; }
+    .btn-outline { background: transparent; border: 1px solid #667eea; color: #667eea; }
+    .btn-outline:hover { background: #667eea; color: white; }
+    .btn-sm { padding: 5px 12px; font-size: 0.8em; }
+    .btn-white { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); }
+    .btn-white:hover { background: rgba(255,255,255,0.3); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* Form */
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; margin-bottom: 6px; font-weight: 500; color: #555; font-size: 0.9em; }
+    .form-group input, .form-group select { width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.95em; transition: border-color 0.2s; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.15); }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #eee; font-size: 0.9em; }
+    th { background: #f8f9ff; color: #555; font-weight: 600; white-space: nowrap; }
+    tr:hover { background: #f8f9ff; }
+
+    /* Nav tabs */
+    .nav-tabs { display: flex; gap: 4px; background: #f0f2f5; padding: 4px; border-radius: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .nav-tab { padding: 10px 18px; border: none; background: transparent; border-radius: 8px; cursor: pointer; font-size: 0.9em; font-weight: 500; color: #666; transition: all 0.2s; }
+    .nav-tab.active { background: #667eea; color: white; box-shadow: 0 2px 8px rgba(102,126,234,0.3); }
+    .nav-tab:hover:not(.active) { background: #e0e3f0; }
+
+    /* Login page */
+    .login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .login-card { background: white; border-radius: 16px; padding: 40px; width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .login-card h1 { text-align: center; color: #333; margin-bottom: 8px; font-size: 1.6em; }
+    .login-card p { text-align: center; color: #888; margin-bottom: 24px; font-size: 0.9em; }
+
+    /* Alert */
+    .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 0.9em; }
+    .alert-error { background: #ffeef0; color: #d63031; border: 1px solid #ffcccc; }
+    .alert-success { background: #eafff5; color: #27ae60; border: 1px solid #b8f0d5; }
+    .alert-info { background: #eef3ff; color: #667eea; border: 1px solid #c5d3ff; }
+
+    /* Badge */
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 600; }
+    .badge-pending { background: #fff3cd; color: #856404; }
+    .badge-completed { background: #d4edda; color: #155724; }
+    .badge-unpaid { background: #ffeef0; color: #d63031; }
+    .badge-open { background: #d4edda; color: #155724; }
+    .badge-closed { background: #f0f0f0; color: #999; }
+
+    /* Grid */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+    /* Info box */
+    .info-box { background: #f8f9ff; border-radius: 10px; padding: 16px; text-align: center; }
+    .info-box .number { font-size: 2em; font-weight: 700; color: #667eea; }
+    .info-box .label { font-size: 0.85em; color: #888; margin-top: 4px; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .container { padding: 12px; }
+      .card { padding: 16px; }
+      .header { padding: 12px 16px; }
+      .header h1 { font-size: 1.1em; }
+      .nav-tabs { gap: 2px; }
+      .nav-tab { padding: 8px 12px; font-size: 0.8em; }
+    }
+
+    /* Toggle switch */
+    .toggle { position: relative; width: 44px; height: 24px; display: inline-block; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; border-radius: 24px; transition: 0.3s; }
+    .toggle .slider:before { content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s; }
+    .toggle input:checked + .slider { background: #667eea; }
+    .toggle input:checked + .slider:before { transform: translateX(20px); }
+
+    /* Modal */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 200; }
+    .modal { background: white; border-radius: 16px; padding: 28px; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
+    .modal h3 { margin-bottom: 16px; color: #333; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, createContext, useContext } = React;
+
+    const API = window.location.origin + '/api';
+
+    // ============ Auth Context ============
+    const AuthContext = createContext();
+
+    function useAuth() { return useContext(AuthContext); }
+
+    function AuthProvider({ children }) {
+      const [user, setUser] = useState(null);
+      const [token, setToken] = useState(localStorage.getItem('token'));
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        if (token) {
+          fetch(`${API}/auth/me`, { headers: { 'Authorization': `Bearer ${token}` }})
+            .then(r => r.json())
+            .then(d => { if (d.user) setUser(d.user); else logout(); })
+            .catch(() => logout())
+            .finally(() => setLoading(false));
+        } else {
+          setLoading(false);
+        }
+      }, [token]);
+
+      const login = async (account, password) => {
+        const r = await fetch(`${API}/auth/login`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account, password })
+        });
+        const d = await r.json();
+        if (r.ok) {
+          localStorage.setItem('token', d.token);
+          setToken(d.token);
+          setUser(d.user);
+          return { ok: true };
+        }
+        return { ok: false, error: d.error };
+      };
+
+      const logout = () => {
+        localStorage.removeItem('token');
+        setToken(null);
+        setUser(null);
+      };
+
+      const authFetch = useCallback(async (url, options = {}) => {
+        const headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
+        if (!(options.body instanceof FormData)) {
+          headers['Content-Type'] = 'application/json';
+        }
+        return fetch(url, { ...options, headers });
+      }, [token]);
+
+      if (loading) return React.createElement('div', { style: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}, '載入中...');
+
+      return React.createElement(AuthContext.Provider, { value: { user, token, login, logout, authFetch }}, children);
+    }
+
+    // ============ Helper ============
+    const LOC_LABELS = { headquarters: '總部', dachang: '大昌', online: '線上' };
+    const PERIOD_LABELS = { morning: '早', afternoon: '午', evening: '晚', online: '線上' };
+    const STATUS_LABELS = { pending: '處理中', completed: '處理完成', unpaid: '未繳費' };
+
+    function formatDate(d) { return d || '-'; }
+
+    // ============ Login Page ============
+    function LoginPage() {
+      const { login } = useAuth();
+      const [account, setAccount] = useState('');
+      const [password, setPassword] = useState('');
+      const [error, setError] = useState('');
+      const [isLoading, setIsLoading] = useState(false);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError('');
+        const result = await login(account, password);
+        if (!result.ok) setError(result.error);
+        setIsLoading(false);
+      };
+
+      return (
+        <div className="login-page">
+          <div className="login-card">
+            <h1>📚 補課預約系統</h1>
+            <p>Successful Tutoring Class</p>
+            {error && <div className="alert alert-error">{error}</div>}
+            <form onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label>帳號</label>
+                <input type="text" value={account} onChange={e => setAccount(e.target.value)} placeholder="請輸入帳號" />
+              </div>
+              <div className="form-group">
+                <label>密碼</label>
+                <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="請輸入密碼" />
+              </div>
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', fontSize: '1em' }} disabled={isLoading}>
+                {isLoading ? '登入中...' : '登　入'}
+              </button>
+            </form>
+            <div style={{ marginTop: 20, fontSize: '0.8em', color: '#aaa', textAlign: 'center' }}>
+              測試帳號：admin / admin123（管理員）<br/>
+              A123456789 / student123（學生）
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ============ Student: Book Online ============
+    function BookOnline() {
+      const { authFetch, user } = useAuth();
+      const [dates, setDates] = useState([]);
+      const [form, setForm] = useState({ booking_date: '', course: '', course_date: '' });
+      const [msg, setMsg] = useState({ type: '', text: '' });
+
+      useEffect(() => {
+        authFetch(`${API}/bookings/available-dates`).then(r => r.json()).then(d => setDates(d.dates || []));
+      }, []);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!form.booking_date) return setMsg({ type: 'error', text: '請選擇補課日期' });
+        const r = await authFetch(`${API}/bookings`, {
+          method: 'POST',
+          body: JSON.stringify({ location: 'online', booking_date: form.booking_date, period: 'online', class_name: user.class_name, course: form.course, course_date: form.course_date })
+        });
+        const d = await r.json();
+        if (r.ok) { setMsg({ type: 'success', text: d.message }); setForm({ booking_date: '', course: '', course_date: '' }); }
+        else setMsg({ type: 'error', text: d.error });
+      };
+
+      return (
+        <div className="card">
+          <h2>預約線上補課</h2>
+          {msg.text && <div className={`alert alert-${msg.type}`}>{msg.text}</div>}
+          <form onSubmit={handleSubmit}>
+            <div className="grid-2">
+              <div className="form-group">
+                <label>補課日期</label>
+                <select value={form.booking_date} onChange={e => setForm({ ...form, booking_date: e.target.value })}>
+                  <option value="">請選擇日期</option>
+                  {dates.map(d => <option key={d} value={d}>{d} ({['日','一','二','三','四','五','六'][new Date(d+'T00:00:00').getDay()]})</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>班級</label>
+                <input type="text" value={user.class_name || ''} disabled />
+              </div>
+            </div>
+            <div className="grid-2">
+              <div className="form-group">
+                <label>課程</label>
+                <input type="text" value={form.course} onChange={e => setForm({ ...form, course: e.target.value })} placeholder="請輸入課程名稱" />
+              </div>
+              <div className="form-group">
+                <label>課程日期</label>
+                <input type="date" value={form.course_date} onChange={e => setForm({ ...form, course_date: e.target.value })} />
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary">預約</button>
+          </form>
+        </div>
+      );
+    }
+
+    // ============ Student: Book On-site ============
+    function BookOnsite() {
+      const { authFetch, user } = useAuth();
+      const [dates, setDates] = useState([]);
+      const [slots, setSlots] = useState([]);
+      const [remaining, setRemaining] = useState(null);
+      const [form, setForm] = useState({ location: '', booking_date: '', period: '', course: '', course_date: '' });
+      const [msg, setMsg] = useState({ type: '', text: '' });
+
+      useEffect(() => {
+        authFetch(`${API}/bookings/available-dates`).then(r => r.json()).then(d => setDates(d.dates || []));
+      }, []);
+
+      useEffect(() => {
+        if (form.booking_date && form.location) {
+          authFetch(`${API}/bookings/available-slots?date=${form.booking_date}&location=${form.location}`)
+            .then(r => r.json()).then(d => setSlots(d.slots || []));
+        } else { setSlots([]); }
+        setForm(f => ({ ...f, period: '' }));
+        setRemaining(null);
+      }, [form.booking_date, form.location]);
+
+      useEffect(() => {
+        if (form.booking_date && form.period && form.location) {
+          authFetch(`${API}/bookings/remaining-computers?date=${form.booking_date}&period=${form.period}&location=${form.location}`)
+            .then(r => r.json()).then(d => setRemaining(d.remaining));
+        } else { setRemaining(null); }
+      }, [form.booking_date, form.period, form.location]);
+
+      const canBook = remaining !== null && remaining > 0;
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!form.location || !form.booking_date || !form.period) return setMsg({ type: 'error', text: '請填寫所有必要欄位' });
+        const r = await authFetch(`${API}/bookings`, {
+          method: 'POST',
+          body: JSON.stringify({ ...form, class_name: user.class_name })
+        });
+        const d = await r.json();
+        if (r.ok) { setMsg({ type: 'success', text: d.message }); setForm({ location: '', booking_date: '', period: '', course: '', course_date: '' }); setRemaining(null); }
+        else setMsg({ type: 'error', text: d.error });
+      };
+
+      return (
+        <div className="card">
+          <h2>預約定點補課</h2>
+          {msg.text && <div className={`alert alert-${msg.type}`}>{msg.text}</div>}
+          <form onSubmit={handleSubmit}>
+            <div className="grid-2">
+              <div className="form-group">
+                <label>補課地點</label>
+                <select value={form.location} onChange={e => setForm({ ...form, location: e.target.value })}>
+                  <option value="">請選擇地點</option>
+                  <option value="headquarters">總部</option>
+                  <option value="dachang">大昌</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>補課日期</label>
+                <select value={form.booking_date} onChange={e => setForm({ ...form, booking_date: e.target.value })}>
+                  <option value="">請選擇日期</option>
+                  {dates.map(d => <option key={d} value={d}>{d} ({['日','一','二','三','四','五','六'][new Date(d+'T00:00:00').getDay()]})</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid-2">
+              <div className="form-group">
+                <label>補課時段</label>
+                <select value={form.period} onChange={e => setForm({ ...form, period: e.target.value })} disabled={slots.length === 0}>
+                  <option value="">請選擇時段</option>
+                  {slots.map(s => <option key={s.period} value={s.period}>{s.period_label}</option>)}
+                </select>
+                {slots.length === 0 && form.location && form.booking_date && <small style={{ color: '#999' }}>該日期無開放時段</small>}
+              </div>
+              <div className="form-group">
+                <label>剩餘可預約電腦數量</label>
+                <div className="info-box" style={{ padding: '10px' }}>
+                  <span className="number" style={{ fontSize: '1.4em', color: remaining > 0 ? '#27ae60' : remaining === 0 ? '#e74c3c' : '#999' }}>
+                    {remaining !== null ? remaining : '-'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="grid-2">
+              <div className="form-group">
+                <label>班級</label>
+                <input type="text" value={user.class_name || ''} disabled />
+              </div>
+              <div className="form-group">
+                <label>課程</label>
+                <input type="text" value={form.course} onChange={e => setForm({ ...form, course: e.target.value })} placeholder="請輸入課程名稱" disabled={!canBook} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>課程日期</label>
+              <input type="date" value={form.course_date} onChange={e => setForm({ ...form, course_date: e.target.value })} disabled={!canBook} />
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={!canBook}>預約</button>
+            {remaining === 0 && <span style={{ marginLeft: 12, color: '#e74c3c', fontSize: '0.9em' }}>電腦已滿，無法預約</span>}
+          </form>
+        </div>
+      );
+    }
+
+    // ============ Student: My Bookings ============
+    function MyBookings() {
+      const { authFetch } = useAuth();
+      const [bookings, setBookings] = useState([]);
+      const [msg, setMsg] = useState('');
+
+      const load = () => {
+        authFetch(`${API}/bookings/my`).then(r => r.json()).then(d => setBookings(d.bookings || []));
+      };
+      useEffect(load, []);
+
+      const cancel = async (id) => {
+        if (!confirm('確定要取消此預約嗎？')) return;
+        const r = await authFetch(`${API}/bookings/${id}`, { method: 'DELETE' });
+        const d = await r.json();
+        if (r.ok) { setMsg(d.message); load(); }
+        else setMsg(d.error);
+      };
+
+      return (
+        <div className="card">
+          <h2>查詢預約補課</h2>
+          {msg && <div className="alert alert-info">{msg}</div>}
+          <p style={{ fontSize: '0.85em', color: '#888', marginBottom: 12 }}>只顯示尚未到期的預約，最晚取消時間為補課日1天前</p>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>補課地點</th>
+                  <th>補課日期</th>
+                  <th>補課時段</th>
+                  <th>課程</th>
+                  <th>課程日期</th>
+                  <th>審核狀況</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bookings.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', color: '#999', padding: 30 }}>目前沒有預約記錄</td></tr>}
+                {bookings.map(b => (
+                  <tr key={b.id}>
+                    <td>{LOC_LABELS[b.location]}</td>
+                    <td>{b.booking_date}</td>
+                    <td>{PERIOD_LABELS[b.period]}</td>
+                    <td>{b.course || '-'}</td>
+                    <td>{formatDate(b.course_date)}</td>
+                    <td><span className={`badge badge-${b.status}`}>{STATUS_LABELS[b.status]}</span></td>
+                    <td><button className="btn btn-danger btn-sm" onClick={() => cancel(b.id)}>取消</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    // ============ Student Dashboard ============
+    function StudentDashboard() {
+      const [tab, setTab] = useState('online');
+
+      return (
+        <div className="container">
+          <div className="nav-tabs">
+            <button className={`nav-tab ${tab === 'online' ? 'active' : ''}`} onClick={() => setTab('online')}>預約線上補課</button>
+            <button className={`nav-tab ${tab === 'onsite' ? 'active' : ''}`} onClick={() => setTab('onsite')}>預約定點補課</button>
+            <button className={`nav-tab ${tab === 'my' ? 'active' : ''}`} onClick={() => setTab('my')}>查詢預約</button>
+          </div>
+          {tab === 'online' && <BookOnline />}
+          {tab === 'onsite' && <BookOnsite />}
+          {tab === 'my' && <MyBookings />}
+        </div>
+      );
+    }
+
+    // ============ Admin: Timeslot Management ============
+    function AdminTimeslots() {
+      const { authFetch } = useAuth();
+      const [slots, setSlots] = useState([]);
+      const [loc, setLoc] = useState('headquarters');
+      const [msg, setMsg] = useState('');
+
+      const load = () => {
+        authFetch(`${API}/admin/timeslots`).then(r => r.json()).then(d => setSlots(d.slots || []));
+      };
+      useEffect(load, []);
+
+      const toggle = async (slot) => {
+        await authFetch(`${API}/admin/timeslots/${slot.id}`, {
+          method: 'PUT', body: JSON.stringify({ is_open: slot.is_open ? 0 : 1 })
+        });
+        load();
+      };
+
+      const updateCount = async (slot, count) => {
+        await authFetch(`${API}/admin/timeslots/${slot.id}`, {
+          method: 'PUT', body: JSON.stringify({ computer_count: parseInt(count) })
+        });
+        load();
+      };
+
+      const filtered = slots.filter(s => s.location === loc);
+
+      return (
+        <div className="card">
+          <h2>時段管理</h2>
+          {msg && <div className="alert alert-success">{msg}</div>}
+          <div style={{ marginBottom: 16 }}>
+            <button className={`btn ${loc === 'headquarters' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setLoc('headquarters')} style={{ marginRight: 8 }}>總部</button>
+            <button className={`btn ${loc === 'dachang' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setLoc('dachang')}>大昌</button>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>星期</th><th>時段</th><th>電腦數</th><th>是否開放</th></tr>
+              </thead>
+              <tbody>
+                {filtered.map(s => (
+                  <tr key={s.id}>
+                    <td>{s.day_label}</td>
+                    <td>{s.period_label}</td>
+                    <td>
+                      <input type="number" value={s.computer_count} onChange={e => updateCount(s, e.target.value)}
+                        style={{ width: 60, padding: '4px 8px', borderRadius: 6, border: '1px solid #ddd' }} min="0" />
+                    </td>
+                    <td>
+                      <label className="toggle">
+                        <input type="checkbox" checked={!!s.is_open} onChange={() => toggle(s)} />
+                        <span className="slider"></span>
+                      </label>
+                      <span style={{ marginLeft: 8 }} className={`badge ${s.is_open ? 'badge-open' : 'badge-closed'}`}>{s.is_open ? '是' : '否'}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    // ============ Admin: Booking Management ============
+    function AdminBookings() {
+      const { authFetch } = useAuth();
+      const [bookings, setBookings] = useState([]);
+      const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+      const [endDate, setEndDate] = useState((() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0]; })());
+      const [msg, setMsg] = useState({ type: '', text: '' });
+      const [showAdd, setShowAdd] = useState(false);
+      const [students, setStudents] = useState([]);
+      const [editId, setEditId] = useState(null);
+      const [editForm, setEditForm] = useState({});
+
+      const load = () => {
+        authFetch(`${API}/bookings/admin?start_date=${startDate}&end_date=${endDate}`)
+          .then(r => r.json()).then(d => setBookings(d.bookings || []));
+      };
+      useEffect(load, [startDate, endDate]);
+
+      const loadStudents = () => {
+        authFetch(`${API}/admin/students`).then(r => r.json()).then(d => setStudents(d.students || []));
+      };
+
+      const del = async (id) => {
+        if (!confirm('確定刪除？')) return;
+        const r = await authFetch(`${API}/bookings/admin/${id}`, { method: 'DELETE' });
+        if (r.ok) { setMsg({ type: 'success', text: '刪除成功' }); load(); }
+      };
+
+      const updateStatus = async (id, status) => {
+        await authFetch(`${API}/admin/stats/bookings/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
+        load();
+      };
+
+      const addPoints = async (id) => {
+        const r = await authFetch(`${API}/admin/stats/bookings/${id}/add-points`, { method: 'POST' });
+        const d = await r.json();
+        setMsg({ type: r.ok ? 'success' : 'error', text: d.message || d.error });
+        load();
+      };
+
+      const startEdit = (b) => { setEditId(b.id); setEditForm({ course: b.course, course_date: b.course_date }); };
+
+      const saveEdit = async () => {
+        await authFetch(`${API}/bookings/admin/${editId}`, { method: 'PUT', body: JSON.stringify(editForm) });
+        setEditId(null); load();
+      };
+
+      return (
+        <div className="card">
+          <h2>預約管理</h2>
+          {msg.text && <div className={`alert alert-${msg.type}`}>{msg.text}</div>}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 16, flexWrap: 'wrap' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>查詢日期</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                <span>~</span>
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+              </div>
+            </div>
+            <button className="btn btn-primary" onClick={() => { loadStudents(); setShowAdd(true); }}>新增預約補課</button>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>地點</th><th>日期</th><th>時段</th><th>學生</th><th>課程</th><th>課程日期</th>
+                  <th>附件</th><th>加點</th><th>審核</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bookings.length === 0 && <tr><td colSpan="10" style={{ textAlign: 'center', color: '#999', padding: 30 }}>無資料</td></tr>}
+                {bookings.map(b => (
+                  <tr key={b.id}>
+                    <td>{LOC_LABELS[b.location]}</td>
+                    <td>{b.booking_date}</td>
+                    <td>{PERIOD_LABELS[b.period]}</td>
+                    <td>{b.student_name}({b.student_account})</td>
+                    <td>
+                      {editId === b.id ?
+                        <input type="text" value={editForm.course} onChange={e => setEditForm({ ...editForm, course: e.target.value })} style={{ width: 100 }} /> :
+                        (b.course || '-')}
+                    </td>
+                    <td>
+                      {editId === b.id ?
+                        <input type="date" value={editForm.course_date} onChange={e => setEditForm({ ...editForm, course_date: e.target.value })} /> :
+                        formatDate(b.course_date)}
+                    </td>
+                    <td>{b.attachment_path ? <a href={b.attachment_path} target="_blank">查看</a> : '-'}</td>
+                    <td>
+                      {b.location === 'online' && !b.points_added ?
+                        <button className="btn btn-warning btn-sm" onClick={() => addPoints(b.id)}>加點</button> :
+                        b.points_added ? '✓' : '-'}
+                    </td>
+                    <td>
+                      <select value={b.status} onChange={e => updateStatus(b.id, e.target.value)}
+                        style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #ddd', fontSize: '0.85em' }}>
+                        <option value="pending">處理中</option>
+                        <option value="completed">處理完成</option>
+                        <option value="unpaid">未繳費</option>
+                      </select>
+                    </td>
+                    <td>
+                      {editId === b.id ?
+                        <><button className="btn btn-success btn-sm" onClick={saveEdit}>存</button>{' '}
+                          <button className="btn btn-outline btn-sm" onClick={() => setEditId(null)}>取消</button></> :
+                        <><button className="btn btn-outline btn-sm" onClick={() => startEdit(b)}>修改</button>{' '}
+                          <button className="btn btn-danger btn-sm" onClick={() => del(b.id)}>刪除</button></>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {showAdd && <AddBookingModal students={students} onClose={() => setShowAdd(false)} onSuccess={() => { setShowAdd(false); load(); }} />}
+        </div>
+      );
+    }
+
+    // Admin: Add Booking Modal
+    function AddBookingModal({ students, onClose, onSuccess }) {
+      const { authFetch } = useAuth();
+      const [form, setForm] = useState({ user_id: '', location: '', booking_date: '', period: '', course: '', course_date: '' });
+      const [slots, setSlots] = useState([]);
+      const [remaining, setRemaining] = useState(null);
+      const [error, setError] = useState('');
+
+      useEffect(() => {
+        if (form.booking_date && form.location && form.location !== 'online') {
+          authFetch(`${API}/bookings/available-slots?date=${form.booking_date}&location=${form.location}`)
+            .then(r => r.json()).then(d => setSlots(d.slots || []));
+        } else { setSlots([]); }
+        setForm(f => ({ ...f, period: form.location === 'online' ? 'online' : '' }));
+      }, [form.booking_date, form.location]);
+
+      useEffect(() => {
+        if (form.booking_date && form.period && form.location && form.location !== 'online') {
+          authFetch(`${API}/bookings/remaining-computers?date=${form.booking_date}&period=${form.period}&location=${form.location}`)
+            .then(r => r.json()).then(d => setRemaining(d.remaining));
+        } else { setRemaining(null); }
+      }, [form.booking_date, form.period, form.location]);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        const r = await authFetch(`${API}/bookings/admin`, { method: 'POST', body: JSON.stringify(form) });
+        const d = await r.json();
+        if (r.ok) onSuccess();
+        else setError(d.error);
+      };
+
+      return (
+        <div className="modal-overlay" onClick={onClose}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3>新增預約補課</h3>
+            {error && <div className="alert alert-error">{error}</div>}
+            <form onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label>學生</label>
+                <select value={form.user_id} onChange={e => setForm({ ...form, user_id: e.target.value })}>
+                  <option value="">請選擇學生</option>
+                  {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.account})</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>補課地點</label>
+                <select value={form.location} onChange={e => setForm({ ...form, location: e.target.value })}>
+                  <option value="">請選擇</option>
+                  <option value="headquarters">總部</option>
+                  <option value="dachang">大昌</option>
+                  <option value="online">線上</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>補課日期</label>
+                <input type="date" value={form.booking_date} onChange={e => setForm({ ...form, booking_date: e.target.value })} />
+              </div>
+              {form.location !== 'online' && (
+                <div className="form-group">
+                  <label>補課時段 {remaining !== null && `(剩餘: ${remaining})`}</label>
+                  <select value={form.period} onChange={e => setForm({ ...form, period: e.target.value })}>
+                    <option value="">請選擇</option>
+                    {slots.map(s => <option key={s.period} value={s.period}>{s.period_label}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="form-group">
+                <label>課程</label>
+                <input type="text" value={form.course} onChange={e => setForm({ ...form, course: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label>課程日期</label>
+                <input type="date" value={form.course_date} onChange={e => setForm({ ...form, course_date: e.target.value })} />
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button type="submit" className="btn btn-primary">預約</button>
+                <button type="button" className="btn btn-outline" onClick={onClose}>取消</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    // ============ Admin: Computer Stats ============
+    function AdminComputerStats() {
+      const { authFetch } = useAuth();
+      const [data, setData] = useState([]);
+      const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+      const [endDate, setEndDate] = useState((() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().split('T')[0]; })());
+
+      const load = () => {
+        authFetch(`${API}/admin/stats/remaining-computers?start_date=${startDate}&end_date=${endDate}`)
+          .then(r => r.json()).then(d => setData(d.data || []));
+      };
+      useEffect(load, [startDate, endDate]);
+
+      return (
+        <div className="card">
+          <h2>剩餘電腦數量</h2>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 16, flexWrap: 'wrap' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>查詢日期</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                <span>~</span>
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+              </div>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>日期</th><th>地點</th><th>時段</th><th>剩餘數量</th></tr></thead>
+              <tbody>
+                {data.length === 0 && <tr><td colSpan="4" style={{ textAlign: 'center', color: '#999', padding: 30 }}>無資料</td></tr>}
+                {data.map((d, i) => (
+                  <tr key={i}>
+                    <td>{d.date}</td>
+                    <td>{d.location_label}</td>
+                    <td>{d.period_label}</td>
+                    <td><span style={{ color: d.remaining > 0 ? '#27ae60' : '#e74c3c', fontWeight: 600 }}>{d.remaining}</span> / {d.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    // ============ Admin: No-show Stats ============
+    function AdminNoShowStats() {
+      const { authFetch } = useAuth();
+      const [records, setRecords] = useState([]);
+      const [month, setMonth] = useState(new Date().toISOString().substring(0, 7));
+      const [students, setStudents] = useState([]);
+      const [msg, setMsg] = useState({ type: '', text: '' });
+
+      const load = () => {
+        authFetch(`${API}/admin/stats/no-show-stats?month=${month}`).then(r => r.json()).then(d => setRecords(d.records || []));
+        authFetch(`${API}/admin/students`).then(r => r.json()).then(d => setStudents(d.students || []));
+      };
+      useEffect(load, [month]);
+
+      const increment = async (userId) => {
+        const r = await authFetch(`${API}/admin/stats/no-show/${userId}/increment?month=${month}`, { method: 'POST' });
+        const d = await r.json();
+        setMsg({ type: 'success', text: d.message + (d.count >= 3 ? '（已達3次，自動停權1個月）' : '') });
+        load();
+      };
+
+      const removeSuspend = async (userId) => {
+        await authFetch(`${API}/admin/stats/no-show/${userId}/suspend`, { method: 'DELETE' });
+        setMsg({ type: 'success', text: '已移除停權' });
+        load();
+      };
+
+      return (
+        <div className="card">
+          <h2>月份缺課統計</h2>
+          {msg.text && <div className={`alert alert-${msg.type}`}>{msg.text}</div>}
+          <div className="alert alert-info">未到補課次數以月累計，達3次將停權預約補課1個月</div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 16, flexWrap: 'wrap' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>查詢月份</label>
+              <input type="month" value={month} onChange={e => setMonth(e.target.value)} />
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>學生</th><th>帳號</th><th>月份</th><th>缺課次數</th><th>操作</th></tr></thead>
+              <tbody>
+                {records.length === 0 && <tr><td colSpan="5" style={{ textAlign: 'center', color: '#999', padding: 30 }}>無缺課記錄</td></tr>}
+                {records.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.name}</td>
+                    <td>{r.account}</td>
+                    <td>{r.year_month}</td>
+                    <td><span style={{ color: r.count >= 3 ? '#e74c3c' : '#333', fontWeight: 600 }}>{r.count}</span></td>
+                    <td>
+                      {students.find(s => s.id === r.user_id && s.is_suspended) &&
+                        <button className="btn btn-warning btn-sm" onClick={() => removeSuspend(r.user_id)}>移除停權</button>
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ marginTop: 20 }}>
+            <h3 style={{ fontSize: '1em', marginBottom: 12 }}>新增缺課記錄</h3>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {students.map(s => (
+                <button key={s.id} className="btn btn-outline btn-sm" onClick={() => increment(s.id)}>
+                  {s.name} +1 缺課 {s.is_suspended ? '🚫' : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ============ Admin: Checkin ============
+    function AdminCheckin() {
+      const { authFetch } = useAuth();
+      const [bookings, setBookings] = useState([]);
+      const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+      const [period, setPeriod] = useState('all');
+      const [msg, setMsg] = useState({ type: '', text: '' });
+
+      const load = () => {
+        authFetch(`${API}/admin/stats/checkin?date=${date}&period=${period}`).then(r => r.json()).then(d => setBookings(d.bookings || []));
+      };
+      useEffect(load, [date, period]);
+
+      const [checkinInput, setCheckinInput] = useState({});
+
+      const doCheckin = async (bookingId) => {
+        const account = checkinInput[bookingId] || '';
+        if (!account) return setMsg({ type: 'error', text: '請輸入學生帳號' });
+        const r = await authFetch(`${API}/admin/stats/checkin/${bookingId}`, { method: 'POST', body: JSON.stringify({ account }) });
+        const d = await r.json();
+        setMsg({ type: r.ok ? 'success' : 'error', text: d.message || d.error });
+        if (r.ok) load();
+      };
+
+      return (
+        <div className="card">
+          <h2>簽到管理</h2>
+          {msg.text && <div className={`alert alert-${msg.type}`}>{msg.text}</div>}
+          <div className="alert alert-info">學生簽到時，需輸入身分證號（帳號）驗證身份</div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 16, flexWrap: 'wrap' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>查詢日期</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>時段</label>
+              <select value={period} onChange={e => setPeriod(e.target.value)}>
+                <option value="all">全部</option>
+                <option value="morning">早</option>
+                <option value="afternoon">午</option>
+                <option value="evening">晚</option>
+              </select>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>地點</th><th>日期</th><th>時段</th><th>學生</th><th>課程</th><th>課程日期</th><th>簽到</th></tr>
+              </thead>
+              <tbody>
+                {bookings.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', color: '#999', padding: 30 }}>無資料</td></tr>}
+                {bookings.map(b => (
+                  <tr key={b.id}>
+                    <td>{LOC_LABELS[b.location]}</td>
+                    <td>{b.booking_date}</td>
+                    <td>{PERIOD_LABELS[b.period]}</td>
+                    <td>{b.student_name}</td>
+                    <td>{b.course || '-'}</td>
+                    <td>{formatDate(b.course_date)}</td>
+                    <td>
+                      {b.checked_in ?
+                        <span style={{ color: '#27ae60', fontWeight: 600 }}>✓ 已簽到 ({b.checked_in_at})</span> :
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input type="text" placeholder="輸入學生帳號" value={checkinInput[b.id] || ''}
+                            onChange={e => setCheckinInput({ ...checkinInput, [b.id]: e.target.value })}
+                            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #ddd', width: 140 }} />
+                          <button className="btn btn-success btn-sm" onClick={() => doCheckin(b.id)}>簽到</button>
+                        </div>
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    // ============ Admin Dashboard ============
+    function AdminDashboard() {
+      const [tab, setTab] = useState('bookings');
+
+      return (
+        <div className="container">
+          <div className="nav-tabs">
+            <button className={`nav-tab ${tab === 'bookings' ? 'active' : ''}`} onClick={() => setTab('bookings')}>預約管理</button>
+            <button className={`nav-tab ${tab === 'timeslots' ? 'active' : ''}`} onClick={() => setTab('timeslots')}>時段管理</button>
+            <button className={`nav-tab ${tab === 'computers' ? 'active' : ''}`} onClick={() => setTab('computers')}>剩餘電腦</button>
+            <button className={`nav-tab ${tab === 'noshow' ? 'active' : ''}`} onClick={() => setTab('noshow')}>缺課統計</button>
+            <button className={`nav-tab ${tab === 'checkin' ? 'active' : ''}`} onClick={() => setTab('checkin')}>簽到管理</button>
+          </div>
+          {tab === 'bookings' && <AdminBookings />}
+          {tab === 'timeslots' && <AdminTimeslots />}
+          {tab === 'computers' && <AdminComputerStats />}
+          {tab === 'noshow' && <AdminNoShowStats />}
+          {tab === 'checkin' && <AdminCheckin />}
+        </div>
+      );
+    }
+
+    // ============ App ============
+    function App() {
+      const { user, logout } = useAuth();
+
+      if (!user) return <LoginPage />;
+
+      return (
+        <div>
+          <div className="header">
+            <h1>📚 補課預約系統</h1>
+            <div className="header-right">
+              <span>{user.name} ({user.role === 'admin' ? '管理員' : '學生'})</span>
+              <button className="btn btn-white btn-sm" onClick={logout}>登出</button>
+            </div>
+          </div>
+          {user.role === 'admin' ? <AdminDashboard /> : <StudentDashboard />}
+        </div>
+      );
+    }
+
+    // ============ Root ============
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <AuthProvider><App /></AuthProvider>
+    );
+  </script>
+</body>
+</html>
