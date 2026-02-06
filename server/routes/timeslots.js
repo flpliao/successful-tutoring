@@ -1,5 +1,5 @@
 const express = require('express');
-const { getDb, saveDatabase } = require('../database');
+const { getPool } = require('../database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
@@ -9,23 +9,17 @@ const periodLabels = { morning: '早', afternoon: '午', evening: '晚' };
 const locationLabels = { headquarters: '總部', dachang: '大昌' };
 
 // GET /api/admin/timeslots
-router.get('/', authenticateToken, requireAdmin, (req, res) => {
+router.get('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const db = getDb();
-    const result = db.exec("SELECT * FROM time_slots ORDER BY location, day_of_week, CASE period WHEN 'morning' THEN 1 WHEN 'afternoon' THEN 2 WHEN 'evening' THEN 3 END");
+    const pool = getPool();
+    const result = await pool.query("SELECT * FROM time_slots ORDER BY location, day_of_week, CASE period WHEN 'morning' THEN 1 WHEN 'afternoon' THEN 2 WHEN 'evening' THEN 3 END");
 
-    const slots = [];
-    if (result.length > 0) {
-      const cols = result[0].columns;
-      for (const row of result[0].values) {
-        const s = {};
-        cols.forEach((col, i) => s[col] = row[i]);
-        s.day_label = dayLabels[s.day_of_week];
-        s.period_label = periodLabels[s.period];
-        s.location_label = locationLabels[s.location];
-        slots.push(s);
-      }
-    }
+    const slots = result.rows.map(s => ({
+      ...s,
+      day_label: dayLabels[s.day_of_week],
+      period_label: periodLabels[s.period],
+      location_label: locationLabels[s.location]
+    }));
 
     res.json({ slots });
   } catch (err) {
@@ -34,20 +28,20 @@ router.get('/', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // PUT /api/admin/timeslots/:id
-router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
+router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const db = getDb();
+    const pool = getPool();
     const { computer_count, is_open } = req.body;
 
     const updates = [];
     const params = [];
-    if (computer_count !== undefined) { updates.push("computer_count = ?"); params.push(computer_count); }
-    if (is_open !== undefined) { updates.push("is_open = ?"); params.push(is_open ? 1 : 0); }
+    let paramIdx = 1;
+    if (computer_count !== undefined) { updates.push(`computer_count = $${paramIdx++}`); params.push(computer_count); }
+    if (is_open !== undefined) { updates.push(`is_open = $${paramIdx++}`); params.push(is_open ? 1 : 0); }
 
     if (updates.length > 0) {
       params.push(req.params.id);
-      db.run(`UPDATE time_slots SET ${updates.join(', ')} WHERE id = ?`, params);
-      saveDatabase();
+      await pool.query(`UPDATE time_slots SET ${updates.join(', ')} WHERE id = $${paramIdx}`, params);
     }
 
     res.json({ message: '更新成功' });

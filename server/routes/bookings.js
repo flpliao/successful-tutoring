@@ -1,5 +1,5 @@
 const express = require('express');
-const { getDb, saveDatabase } = require('../database');
+const { getPool } = require('../database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
@@ -37,7 +37,7 @@ router.get('/available-dates', authenticateToken, (req, res) => {
 });
 
 // GET /api/bookings/available-slots?date=YYYY-MM-DD&location=xxx
-router.get('/available-slots', authenticateToken, (req, res) => {
+router.get('/available-slots', authenticateToken, async (req, res) => {
   try {
     const { date, location } = req.query;
     if (!date || !location) {
@@ -49,25 +49,17 @@ router.get('/available-slots', authenticateToken, (req, res) => {
     }
 
     const dayOfWeek = getDayOfWeek(date);
-    const db = getDb();
-    const result = db.exec(
-      "SELECT * FROM time_slots WHERE location = ? AND day_of_week = ? AND is_open = 1",
+    const pool = getPool();
+    const result = await pool.query(
+      "SELECT * FROM time_slots WHERE location = $1 AND day_of_week = $2 AND is_open = 1",
       [location, dayOfWeek]
     );
 
     const periodLabels = { morning: '早', afternoon: '午', evening: '晚' };
-    const slots = [];
-    if (result.length > 0) {
-      const cols = result[0].columns;
-      for (const row of result[0].values) {
-        const slot = {};
-        cols.forEach((col, i) => slot[col] = row[i]);
-        slots.push({
-          ...slot,
-          period_label: periodLabels[slot.period] || slot.period
-        });
-      }
-    }
+    const slots = result.rows.map(slot => ({
+      ...slot,
+      period_label: periodLabels[slot.period] || slot.period
+    }));
 
     res.json({ slots });
   } catch (err) {
@@ -76,7 +68,7 @@ router.get('/available-slots', authenticateToken, (req, res) => {
 });
 
 // GET /api/bookings/remaining-computers?date=YYYY-MM-DD&period=xxx&location=xxx
-router.get('/remaining-computers', authenticateToken, (req, res) => {
+router.get('/remaining-computers', authenticateToken, async (req, res) => {
   try {
     const { date, period, location } = req.query;
     if (!date || !period || !location) {
@@ -88,21 +80,21 @@ router.get('/remaining-computers', authenticateToken, (req, res) => {
     }
 
     const dayOfWeek = getDayOfWeek(date);
-    const db = getDb();
+    const pool = getPool();
 
     // Get total computers
-    const slotResult = db.exec(
-      "SELECT computer_count FROM time_slots WHERE location = ? AND day_of_week = ? AND period = ?",
+    const slotResult = await pool.query(
+      "SELECT computer_count FROM time_slots WHERE location = $1 AND day_of_week = $2 AND period = $3",
       [location, dayOfWeek, period]
     );
-    const total = slotResult.length > 0 ? slotResult[0].values[0][0] : 0;
+    const total = slotResult.rows.length > 0 ? slotResult.rows[0].computer_count : 0;
 
     // Count booked
-    const bookedResult = db.exec(
-      "SELECT COUNT(*) FROM bookings WHERE location = ? AND booking_date = ? AND period = ?",
+    const bookedResult = await pool.query(
+      "SELECT COUNT(*) as c FROM bookings WHERE location = $1 AND booking_date = $2 AND period = $3",
       [location, date, period]
     );
-    const booked = bookedResult.length > 0 ? bookedResult[0].values[0][0] : 0;
+    const booked = parseInt(bookedResult.rows[0].c);
 
     res.json({ remaining: total - booked, total });
   } catch (err) {
@@ -111,9 +103,9 @@ router.get('/remaining-computers', authenticateToken, (req, res) => {
 });
 
 // POST /api/bookings - Student create booking
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
-    const db = getDb();
+    const pool = getPool();
     const user = req.user;
 
     // Check suspension
@@ -137,40 +129,39 @@ router.post('/', authenticateToken, (req, res) => {
     }
 
     // Check duplicate (same user, same date, same period)
-    const dupResult = db.exec(
-      "SELECT COUNT(*) FROM bookings WHERE user_id = ? AND booking_date = ? AND period = ?",
+    const dupResult = await pool.query(
+      "SELECT COUNT(*) as c FROM bookings WHERE user_id = $1 AND booking_date = $2 AND period = $3",
       [user.id, booking_date, period]
     );
-    if (dupResult.length > 0 && dupResult[0].values[0][0] > 0) {
+    if (parseInt(dupResult.rows[0].c) > 0) {
       return res.status(400).json({ error: '同天同時段已有預約，無法重複預約' });
     }
 
     // Check computer availability for on-site
     if (location !== 'online') {
       const dayOfWeek = getDayOfWeek(booking_date);
-      const slotResult = db.exec(
-        "SELECT computer_count FROM time_slots WHERE location = ? AND day_of_week = ? AND period = ?",
+      const slotResult = await pool.query(
+        "SELECT computer_count FROM time_slots WHERE location = $1 AND day_of_week = $2 AND period = $3",
         [location, dayOfWeek, period]
       );
-      const total = slotResult.length > 0 ? slotResult[0].values[0][0] : 0;
+      const total = slotResult.rows.length > 0 ? slotResult.rows[0].computer_count : 0;
 
-      const bookedResult = db.exec(
-        "SELECT COUNT(*) FROM bookings WHERE location = ? AND booking_date = ? AND period = ?",
+      const bookedResult = await pool.query(
+        "SELECT COUNT(*) as c FROM bookings WHERE location = $1 AND booking_date = $2 AND period = $3",
         [location, booking_date, period]
       );
-      const booked = bookedResult.length > 0 ? bookedResult[0].values[0][0] : 0;
+      const booked = parseInt(bookedResult.rows[0].c);
 
       if (booked >= total) {
         return res.status(400).json({ error: '該時段電腦已全部被預約' });
       }
     }
 
-    db.run(
+    await pool.query(
       `INSERT INTO bookings (user_id, location, booking_date, period, class_name, course, course_date, attachment_path, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [user.id, location, booking_date, period, class_name || user.class_name, course || '', course_date || '', attachment_path || '', 'student']
     );
-    saveDatabase();
 
     res.json({ message: '預約成功' });
   } catch (err) {
@@ -179,45 +170,32 @@ router.post('/', authenticateToken, (req, res) => {
 });
 
 // GET /api/bookings/my - Student's future bookings
-router.get('/my', authenticateToken, (req, res) => {
+router.get('/my', authenticateToken, async (req, res) => {
   try {
-    const db = getDb();
+    const pool = getPool();
     const todayStr = today();
-    const result = db.exec(
-      "SELECT * FROM bookings WHERE user_id = ? AND booking_date >= ? ORDER BY booking_date ASC",
+    const result = await pool.query(
+      "SELECT * FROM bookings WHERE user_id = $1 AND booking_date >= $2 ORDER BY booking_date ASC",
       [req.user.id, todayStr]
     );
 
-    const bookings = [];
-    if (result.length > 0) {
-      const cols = result[0].columns;
-      for (const row of result[0].values) {
-        const b = {};
-        cols.forEach((col, i) => b[col] = row[i]);
-        bookings.push(b);
-      }
-    }
-
-    res.json({ bookings });
+    res.json({ bookings: result.rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // DELETE /api/bookings/:id - Cancel booking (1 day before)
-router.delete('/:id', authenticateToken, (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const db = getDb();
-    const result = db.exec("SELECT * FROM bookings WHERE id = ? AND user_id = ?", [req.params.id, req.user.id]);
+    const pool = getPool();
+    const result = await pool.query("SELECT * FROM bookings WHERE id = $1 AND user_id = $2", [req.params.id, req.user.id]);
 
-    if (result.length === 0 || result[0].values.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: '找不到此預約' });
     }
 
-    const cols = result[0].columns;
-    const row = result[0].values[0];
-    const booking = {};
-    cols.forEach((col, i) => booking[col] = row[i]);
+    const booking = result.rows[0];
 
     // Check: at least 1 day before
     const bookingDate = new Date(booking.booking_date + 'T00:00:00');
@@ -229,8 +207,7 @@ router.delete('/:id', authenticateToken, (req, res) => {
       return res.status(400).json({ error: '最晚需於補課日1天前取消' });
     }
 
-    db.run("DELETE FROM bookings WHERE id = ?", [req.params.id]);
-    saveDatabase();
+    await pool.query("DELETE FROM bookings WHERE id = $1", [req.params.id]);
 
     res.json({ message: '已取消預約' });
   } catch (err) {
@@ -241,41 +218,33 @@ router.delete('/:id', authenticateToken, (req, res) => {
 // ====== Admin routes ======
 
 // GET /api/admin/bookings?start_date=&end_date=
-router.get('/admin', authenticateToken, requireAdmin, (req, res) => {
+router.get('/admin', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
-    const db = getDb();
+    const pool = getPool();
     let sql = `SELECT b.*, u.name as student_name, u.account as student_account, u.class_name as student_class
                FROM bookings b JOIN users u ON b.user_id = u.id`;
     const params = [];
+    let paramIdx = 1;
 
     if (start_date && end_date) {
-      sql += " WHERE b.booking_date BETWEEN ? AND ?";
+      sql += ` WHERE b.booking_date BETWEEN $${paramIdx} AND $${paramIdx + 1}`;
       params.push(start_date, end_date);
+      paramIdx += 2;
     }
     sql += " ORDER BY b.booking_date ASC, b.period ASC";
 
-    const result = db.exec(sql, params);
-    const bookings = [];
-    if (result.length > 0) {
-      const cols = result[0].columns;
-      for (const row of result[0].values) {
-        const b = {};
-        cols.forEach((col, i) => b[col] = row[i]);
-        bookings.push(b);
-      }
-    }
-
-    res.json({ bookings });
+    const result = await pool.query(sql, params);
+    res.json({ bookings: result.rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // POST /api/admin/bookings - Admin create booking (no date restriction)
-router.post('/admin', authenticateToken, requireAdmin, (req, res) => {
+router.post('/admin', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const db = getDb();
+    const pool = getPool();
     const { user_id, location, booking_date, period, class_name, course, course_date, attachment_path } = req.body;
 
     if (!user_id || !location || !booking_date || !period) {
@@ -285,29 +254,28 @@ router.post('/admin', authenticateToken, requireAdmin, (req, res) => {
     // Check computer availability for on-site
     if (location !== 'online') {
       const dayOfWeek = getDayOfWeek(booking_date);
-      const slotResult = db.exec(
-        "SELECT computer_count FROM time_slots WHERE location = ? AND day_of_week = ? AND period = ?",
+      const slotResult = await pool.query(
+        "SELECT computer_count FROM time_slots WHERE location = $1 AND day_of_week = $2 AND period = $3",
         [location, dayOfWeek, period]
       );
-      const total = slotResult.length > 0 ? slotResult[0].values[0][0] : 0;
+      const total = slotResult.rows.length > 0 ? slotResult.rows[0].computer_count : 0;
 
-      const bookedResult = db.exec(
-        "SELECT COUNT(*) FROM bookings WHERE location = ? AND booking_date = ? AND period = ?",
+      const bookedResult = await pool.query(
+        "SELECT COUNT(*) as c FROM bookings WHERE location = $1 AND booking_date = $2 AND period = $3",
         [location, booking_date, period]
       );
-      const booked = bookedResult.length > 0 ? bookedResult[0].values[0][0] : 0;
+      const booked = parseInt(bookedResult.rows[0].c);
 
       if (booked >= total) {
         return res.status(400).json({ error: '該時段電腦已全部被預約' });
       }
     }
 
-    db.run(
+    await pool.query(
       `INSERT INTO bookings (user_id, location, booking_date, period, class_name, course, course_date, attachment_path, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [user_id, location, booking_date, period, class_name || '', course || '', course_date || '', attachment_path || '', 'admin']
     );
-    saveDatabase();
 
     res.json({ message: '預約新增成功' });
   } catch (err) {
@@ -316,27 +284,27 @@ router.post('/admin', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // PUT /api/admin/bookings/:id
-router.put('/admin/:id', authenticateToken, requireAdmin, (req, res) => {
+router.put('/admin/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const db = getDb();
+    const pool = getPool();
     const { course, course_date, status, class_name } = req.body;
 
-    const existing = db.exec("SELECT id FROM bookings WHERE id = ?", [req.params.id]);
-    if (existing.length === 0 || existing[0].values.length === 0) {
+    const existing = await pool.query("SELECT id FROM bookings WHERE id = $1", [req.params.id]);
+    if (existing.rows.length === 0) {
       return res.status(404).json({ error: '找不到此預約' });
     }
 
     const updates = [];
     const params = [];
-    if (course !== undefined) { updates.push("course = ?"); params.push(course); }
-    if (course_date !== undefined) { updates.push("course_date = ?"); params.push(course_date); }
-    if (status !== undefined) { updates.push("status = ?"); params.push(status); }
-    if (class_name !== undefined) { updates.push("class_name = ?"); params.push(class_name); }
+    let paramIdx = 1;
+    if (course !== undefined) { updates.push(`course = $${paramIdx++}`); params.push(course); }
+    if (course_date !== undefined) { updates.push(`course_date = $${paramIdx++}`); params.push(course_date); }
+    if (status !== undefined) { updates.push(`status = $${paramIdx++}`); params.push(status); }
+    if (class_name !== undefined) { updates.push(`class_name = $${paramIdx++}`); params.push(class_name); }
 
     if (updates.length > 0) {
       params.push(req.params.id);
-      db.run(`UPDATE bookings SET ${updates.join(', ')} WHERE id = ?`, params);
-      saveDatabase();
+      await pool.query(`UPDATE bookings SET ${updates.join(', ')} WHERE id = $${paramIdx}`, params);
     }
 
     res.json({ message: '更新成功' });
@@ -346,11 +314,10 @@ router.put('/admin/:id', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // DELETE /api/admin/bookings/:id
-router.delete('/admin/:id', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/admin/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const db = getDb();
-    db.run("DELETE FROM bookings WHERE id = ?", [req.params.id]);
-    saveDatabase();
+    const pool = getPool();
+    await pool.query("DELETE FROM bookings WHERE id = $1", [req.params.id]);
     res.json({ message: '刪除成功' });
   } catch (err) {
     res.status(500).json({ error: err.message });

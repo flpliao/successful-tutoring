@@ -1,26 +1,20 @@
-const initSqlJs = require('sql.js');
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
-const DB_PATH = path.join(__dirname, 'data.sqlite');
-
-let db = null;
+let pool = null;
 
 async function initDatabase() {
-  const SQL = await initSqlJs();
-
-  if (fs.existsSync(DB_PATH)) {
-    const buffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(buffer);
-  } else {
-    db = new SQL.Database();
-  }
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render.com')
+      ? { rejectUnauthorized: false }
+      : false
+  });
 
   // Create tables
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       account TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
       name TEXT NOT NULL,
@@ -28,13 +22,13 @@ async function initDatabase() {
       class_name TEXT,
       is_suspended INTEGER DEFAULT 0,
       suspended_until TEXT,
-      created_at TEXT DEFAULT (datetime('now','localtime'))
+      created_at TIMESTAMP DEFAULT NOW()
     )
   `);
 
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS time_slots (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       location TEXT NOT NULL CHECK(location IN ('headquarters','dachang')),
       day_of_week INTEGER NOT NULL CHECK(day_of_week BETWEEN 1 AND 7),
       period TEXT NOT NULL CHECK(period IN ('morning','afternoon','evening')),
@@ -44,10 +38,10 @@ async function initDatabase() {
     )
   `);
 
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS bookings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
       location TEXT NOT NULL CHECK(location IN ('headquarters','dachang','online')),
       booking_date TEXT NOT NULL,
       period TEXT NOT NULL CHECK(period IN ('morning','afternoon','evening','online')),
@@ -59,41 +53,38 @@ async function initDatabase() {
       points_added INTEGER DEFAULT 0,
       checked_in INTEGER DEFAULT 0,
       checked_in_at TEXT,
-      created_at TEXT DEFAULT (datetime('now','localtime')),
-      created_by TEXT DEFAULT 'student' CHECK(created_by IN ('student','admin')),
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      created_at TIMESTAMP DEFAULT NOW(),
+      created_by TEXT DEFAULT 'student' CHECK(created_by IN ('student','admin'))
     )
   `);
 
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS no_show_records (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
       year_month TEXT NOT NULL,
       count INTEGER DEFAULT 0,
-      UNIQUE(user_id, year_month),
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      UNIQUE(user_id, year_month)
     )
   `);
 
   // Seed data if empty
-  const userCount = db.exec("SELECT COUNT(*) as c FROM users");
-  if (userCount[0].values[0][0] === 0) {
-    seedData();
+  const userCount = await pool.query("SELECT COUNT(*) as c FROM users");
+  if (parseInt(userCount.rows[0].c) === 0) {
+    await seedData();
   }
 
-  saveDatabase();
-  return db;
+  return pool;
 }
 
-function seedData() {
+async function seedData() {
   const hash = bcrypt.hashSync('admin123', 10);
   const studentHash = bcrypt.hashSync('student123', 10);
 
-  db.run("INSERT INTO users (account, password, name, role) VALUES (?, ?, ?, ?)", ['admin', hash, '系統管理員', 'admin']);
-  db.run("INSERT INTO users (account, password, name, role, class_name) VALUES (?, ?, ?, ?, ?)", ['A123456789', studentHash, '王小明', 'student', 'A班']);
-  db.run("INSERT INTO users (account, password, name, role, class_name) VALUES (?, ?, ?, ?, ?)", ['B234567890', studentHash, '李小華', 'student', 'B班']);
-  db.run("INSERT INTO users (account, password, name, role, class_name) VALUES (?, ?, ?, ?, ?)", ['C345678901', studentHash, '陳大文', 'student', 'A班']);
+  await pool.query("INSERT INTO users (account, password, name, role) VALUES ($1, $2, $3, $4)", ['admin', hash, '系統管理員', 'admin']);
+  await pool.query("INSERT INTO users (account, password, name, role, class_name) VALUES ($1, $2, $3, $4, $5)", ['A123456789', studentHash, '王小明', 'student', 'A班']);
+  await pool.query("INSERT INTO users (account, password, name, role, class_name) VALUES ($1, $2, $3, $4, $5)", ['B234567890', studentHash, '李小華', 'student', 'B班']);
+  await pool.query("INSERT INTO users (account, password, name, role, class_name) VALUES ($1, $2, $3, $4, $5)", ['C345678901', studentHash, '陳大文', 'student', 'A班']);
 
   // Seed time_slots - headquarters
   const periods = ['morning', 'afternoon', 'evening'];
@@ -102,8 +93,10 @@ function seedData() {
       let isOpen = 0;
       if (period === 'evening') isOpen = 1;
       if (day === 6 && period === 'afternoon') isOpen = 1; // Saturday afternoon
-      db.run("INSERT INTO time_slots (location, day_of_week, period, computer_count, is_open) VALUES (?, ?, ?, ?, ?)",
-        ['headquarters', day, period, 8, isOpen]);
+      await pool.query(
+        "INSERT INTO time_slots (location, day_of_week, period, computer_count, is_open) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+        ['headquarters', day, period, 8, isOpen]
+      );
     }
   }
 
@@ -112,20 +105,16 @@ function seedData() {
     for (const period of periods) {
       let isOpen = 0;
       if (day >= 1 && day <= 5 && period === 'evening') isOpen = 1; // Mon-Fri evening only
-      db.run("INSERT INTO time_slots (location, day_of_week, period, computer_count, is_open) VALUES (?, ?, ?, ?, ?)",
-        ['dachang', day, period, 8, isOpen]);
+      await pool.query(
+        "INSERT INTO time_slots (location, day_of_week, period, computer_count, is_open) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+        ['dachang', day, period, 8, isOpen]
+      );
     }
   }
 }
 
-function saveDatabase() {
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(DB_PATH, buffer);
+function getPool() {
+  return pool;
 }
 
-function getDb() {
-  return db;
-}
-
-module.exports = { initDatabase, getDb, saveDatabase };
+module.exports = { initDatabase, getPool };

@@ -1,9 +1,9 @@
 const jwt = require('jsonwebtoken');
-const { getDb } = require('../database');
+const { getPool } = require('../database');
 
-const JWT_SECRET = 'makeup-class-booking-secret-key-2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'makeup-class-booking-secret-key-2026';
 
-function authenticateToken(req, res, next) {
+async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -13,25 +13,23 @@ function authenticateToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const db = getDb();
-    const result = db.exec("SELECT id, account, name, role, class_name, is_suspended, suspended_until FROM users WHERE id = ?", [decoded.userId]);
+    const pool = getPool();
+    const result = await pool.query(
+      "SELECT id, account, name, role, class_name, is_suspended, suspended_until FROM users WHERE id = $1",
+      [decoded.userId]
+    );
 
-    if (result.length === 0 || result[0].values.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(401).json({ error: '使用者不存在' });
     }
 
-    const row = result[0].values[0];
-    const cols = result[0].columns;
-    const user = {};
-    cols.forEach((col, i) => user[col] = row[i]);
+    const user = result.rows[0];
 
     // Check suspension
     if (user.is_suspended && user.suspended_until) {
       const now = new Date().toISOString().split('T')[0];
       if (now >= user.suspended_until) {
-        db.run("UPDATE users SET is_suspended = 0, suspended_until = NULL WHERE id = ?", [user.id]);
-        const { saveDatabase } = require('../database');
-        saveDatabase();
+        await pool.query("UPDATE users SET is_suspended = 0, suspended_until = NULL WHERE id = $1", [user.id]);
         user.is_suspended = 0;
         user.suspended_until = null;
       }

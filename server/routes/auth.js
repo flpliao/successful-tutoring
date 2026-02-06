@@ -1,30 +1,27 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { getDb } = require('../database');
+const { getPool } = require('../database');
 const { authenticateToken, JWT_SECRET } = require('../middleware/auth');
 
 const router = express.Router();
 
 // POST /api/auth/login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   try {
     const { account, password } = req.body;
     if (!account || !password) {
       return res.status(400).json({ error: '請輸入帳號和密碼' });
     }
 
-    const db = getDb();
-    const result = db.exec("SELECT * FROM users WHERE account = ?", [account]);
+    const pool = getPool();
+    const result = await pool.query("SELECT * FROM users WHERE account = $1", [account]);
 
-    if (result.length === 0 || result[0].values.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(401).json({ error: '帳號或密碼錯誤' });
     }
 
-    const row = result[0].values[0];
-    const cols = result[0].columns;
-    const user = {};
-    cols.forEach((col, i) => user[col] = row[i]);
+    const user = result.rows[0];
 
     if (!bcrypt.compareSync(password, user.password)) {
       return res.status(401).json({ error: '帳號或密碼錯誤' });
