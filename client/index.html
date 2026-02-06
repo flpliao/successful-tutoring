@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>補課預約系統</title>
+  <title>成功補習班 - 補課預約系統</title>
+  <link rel="icon" href="https://success.org.tw/upload/5402/favicon_images/892257c2-7fb0-4d3b-8f5d-675adab375bf.webp" type="image/webp">
+  <link rel="apple-touch-icon" href="https://success.org.tw/upload/5402/favicon_images/892257c2-7fb0-4d3b-8f5d-675adab375bf.webp">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
@@ -17,10 +19,10 @@
     .card h2 { font-size: 1.3em; margin-bottom: 16px; color: #1a1a2e; border-bottom: 2px solid #667eea; padding-bottom: 8px; display: inline-block; }
 
     /* Header */
-    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+    .header { background: #fff; color: #333; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.08); border-bottom: 3px solid #e8b730; }
     .header h1 { font-size: 1.4em; }
     .header-right { display: flex; align-items: center; gap: 12px; }
-    .header-right span { font-size: 0.9em; opacity: 0.9; }
+    .header-right span { font-size: 0.9em; color: #555; }
 
     /* Buttons */
     .btn { padding: 8px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9em; font-weight: 500; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
@@ -35,8 +37,8 @@
     .btn-outline { background: transparent; border: 1px solid #667eea; color: #667eea; }
     .btn-outline:hover { background: #667eea; color: white; }
     .btn-sm { padding: 5px 12px; font-size: 0.8em; }
-    .btn-white { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); }
-    .btn-white:hover { background: rgba(255,255,255,0.3); }
+    .btn-white { background: #f0f2f5; color: #555; border: 1px solid #ddd; }
+    .btn-white:hover { background: #e0e3e8; color: #333; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
     /* Form */
@@ -58,10 +60,20 @@
     .nav-tab.active { background: #667eea; color: white; box-shadow: 0 2px 8px rgba(102,126,234,0.3); }
     .nav-tab:hover:not(.active) { background: #e0e3f0; }
 
+    /* Logo */
+    .logo-wide { height: 40px; display: block; }
+    .logo-icon { height: 36px; display: none; }
+    .login-logo { text-align: center; margin-bottom: 16px; }
+    .login-logo .logo-wide { height: 60px; display: inline-block; }
+    .login-logo .logo-icon { height: 56px; display: none; }
+    .header-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .header-logo-text { font-size: 1.1em; font-weight: 700; color: #333; display: none; }
+
     /* Login page */
-    .login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .login-card { background: white; border-radius: 16px; padding: 40px; width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #f5f0e0 0%, #e8dcc8 50%, #d4c5a0 100%); }
+    .login-card { background: white; border-radius: 16px; padding: 40px; width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
     .login-card h1 { text-align: center; color: #333; margin-bottom: 8px; font-size: 1.6em; }
+    .login-card .subtitle { text-align: center; color: #667eea; margin-bottom: 6px; font-size: 1.05em; font-weight: 600; }
     .login-card p { text-align: center; color: #888; margin-bottom: 24px; font-size: 0.9em; }
 
     /* Alert */
@@ -96,6 +108,13 @@
       .header h1 { font-size: 1.1em; }
       .nav-tabs { gap: 2px; }
       .nav-tab { padding: 8px 12px; font-size: 0.8em; }
+      /* Mobile: show icon, hide wide logo */
+      .logo-wide { display: none !important; }
+      .logo-icon { display: inline-block !important; }
+      .login-logo .logo-icon { height: 52px; }
+      .header-logo .logo-icon { height: 32px; }
+      .header-logo-text { display: inline; font-size: 0.95em; }
+      .login-card { width: 92%; padding: 28px 20px; }
     }
 
     /* Toggle switch */
@@ -202,8 +221,12 @@
       return (
         <div className="login-page">
           <div className="login-card">
-            <h1>📚 補課預約系統</h1>
-            <p>Successful Tutoring Class</p>
+            <div className="login-logo">
+              <img className="logo-wide" src="https://success.org.tw/upload/5402/logo_images/170acbdc-d4ba-403a-87dd-8709b776af67.webp" alt="成功補習班" />
+              <img className="logo-icon" src="https://success.org.tw/upload/5402/favicon_images/892257c2-7fb0-4d3b-8f5d-675adab375bf.webp" alt="成功補習班" />
+            </div>
+            <div className="subtitle">補課預約系統</div>
+            <p>Makeup Class Booking System</p>
             {error && <div className="alert alert-error">{error}</div>}
             <form onSubmit={handleSubmit}>
               <div className="form-group">
@@ -962,7 +985,11 @@
       return (
         <div>
           <div className="header">
-            <h1>📚 補課預約系統</h1>
+            <div className="header-logo">
+              <img className="logo-wide" src="https://success.org.tw/upload/5402/logo_images/170acbdc-d4ba-403a-87dd-8709b776af67.webp" alt="成功補習班" />
+              <img className="logo-icon" src="https://success.org.tw/upload/5402/favicon_images/892257c2-7fb0-4d3b-8f5d-675adab375bf.webp" alt="成功補習班" />
+              <span className="header-logo-text">補課預約</span>
+            </div>
             <div className="header-right">
               <span>{user.name} ({user.role === 'admin' ? '管理員' : '學生'})</span>
               <button className="btn btn-white btn-sm" onClick={logout}>登出</button>
